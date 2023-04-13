@@ -1,11 +1,11 @@
 import signal
 import time
+from datetime import datetime
 from typing import List
 import efinance as ef
 import multitasking
 import pandas as pd
 from retry import retry
-from schedule import repeat, every, run_pending, Job
 from tqdm import tqdm
 
 import config
@@ -58,6 +58,7 @@ class StockManager(metaclass=SingletonMeta):
         self.stocks_count = len(self.stocks_code)
         self.schedule_task_finished = True
         # TODO: 从文件中加载当天的历史数据
+        self.real_time_quote_data_frame_holder = pd.DataFrame()
 
     @retry(tries=3, delay=1)
     def get_real_time_quotes(self, stock_codes: List[str]) -> str:
@@ -91,10 +92,12 @@ class StockManager(metaclass=SingletonMeta):
 
     def _save_to_df_and_file(self, real_time_quote: RealTimeQuote):
         new_row = pd.DataFrame([real_time_quote])
-        if real_time_quote.code in self.real_time_df_dict:
-            self.real_time_df_dict[real_time_quote.code].append(new_row)
-        else:
-            self.real_time_df_dict[real_time_quote.code] = new_row
+        # todo: 暂时不做数据分析，只需要把数据存下来
+        # if real_time_quote.code in self.real_time_df_dict:
+        #     # DataFrame的append()不改变原来的返回一个新的对象
+        #     self.real_time_df_dict[real_time_quote.code] = self.real_time_df_dict[real_time_quote.code].append(new_row)
+        # else:
+        #     self.real_time_df_dict[real_time_quote.code] = new_row
         df_to_csv(new_row)
 
     def _parse_and_update(self, response: str):
@@ -112,8 +115,8 @@ stock_manager = StockManager()
 
 while True:
     # todo: 或许time.sleep(seconds)可以是动态的，在交易时间内是20s，交易时间外要等待直到下一个交易时间
-    if is_trade_time():
+    if is_trade_time(datetime.now()):
         stock_manager.update_real_time_quotes()
     else:
         print("It's not trading time now")
-    time.sleep(20)
+    time.sleep(10)

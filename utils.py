@@ -12,18 +12,25 @@ import config
 from stock import RealTimeQuote
 
 
-def df_to_csv(df: pd.DataFrame):
+def df_to_csv(df: pd.DataFrame) -> bool:
+    if not isinstance(df, pd.DataFrame):
+        return False
     save_dir = os.path.join(config.RESOURCES_DIR, df.loc[0]["code"])
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_path = os.path.join(save_dir, f"{df.loc[0]['date']}.csv")
-    df.to_csv(
-        save_path,
-        mode="a",
-        index=False,
-        encoding="utf-8",
-        header=not os.path.exists(save_path)
-    )
+    try:
+        df.to_csv(
+            save_path,
+            mode="a",
+            index=False,
+            encoding="utf-8",
+            header=not os.path.exists(save_path)
+        )
+        return True
+    except Exception as e:
+        print(f"write to {save_path} failed")
+        return False
 
 
 def parse_sina_response_text(text: str) -> Optional[RealTimeQuote]:
@@ -59,16 +66,15 @@ def code_with_prefix(code: str) -> str:
     return code
 
 
-def is_trade_time() -> bool:
+def is_trade_time(_datetime: datetime) -> bool:
     """
-    当前是否是交易时间
+    输入是否是交易时间
     :return: bool value
     """
-    now = datetime.now()
     # 工作日
-    if is_workday(now.date()):
-        if datetime.isoweekday(now) < 6:  # 不是周六日(1-7表示周一至周末)
-            now_time = now.time()
+    if is_workday(_datetime.date()):
+        if datetime.isoweekday(_datetime) < 6:  # 不是周六日(1-7表示周一至周末)
+            now_time = _datetime.time()
             # 在开盘时间内
             if const.FIRST_OPENING_TIME < now_time < const.FIRST_CLOSING_TIME:
                 return True
