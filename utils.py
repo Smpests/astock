@@ -1,4 +1,9 @@
+from datetime import datetime
 import os
+
+from chinese_calendar import is_workday
+
+from common import const
 from common.const import BAD_STOCK_NAME_CONTAINS, SHANGHAI_PREFIX, BEIJING_PREFIX
 from typing import Optional
 import pandas as pd
@@ -52,3 +57,21 @@ def code_with_prefix(code: str) -> str:
     else:
         code = "sz" + code
     return code
+
+
+def is_trade_time() -> bool:
+    """
+    当前是否是交易时间
+    :return: bool value
+    """
+    now = datetime.now()
+    # 工作日
+    if is_workday(now.date()):
+        if datetime.isoweekday(now) < 6:  # 不是周六日(1-7表示周一至周末)
+            now_time = now.time()
+            # 在开盘时间内
+            if const.FIRST_OPENING_TIME < now_time < const.FIRST_CLOSING_TIME:
+                return True
+            if const.SECOND_OPENING_TIME < now_time < const.SECOND_CLOSING_TIME:
+                return True
+    return False

@@ -1,8 +1,6 @@
-import asyncio
 import signal
 import time
 from typing import List
-
 import efinance as ef
 import multitasking
 import pandas as pd
@@ -16,7 +14,7 @@ import requests
 
 from decorator import cost
 from stock import Stock, RealTimeQuote
-from utils import parse_sina_response_text, df_to_csv, code_with_prefix, is_bad_stock
+from utils import parse_sina_response_text, df_to_csv, code_with_prefix, is_bad_stock, is_trade_time
 
 # kill all tasks on ctrl-c
 signal.signal(signal.SIGINT, multitasking.killall)
@@ -77,17 +75,12 @@ class StockManager(metaclass=SingletonMeta):
             raise
 
     @cost
-    # @repeat(every(10).seconds.at("9:30").until("11:30"))
-    # @repeat(every(10).seconds.at("13:00").until("15:00"))
     def update_real_time_quotes(self, batch_size=200):
-        # if self.schedule_task_finished:
-            self.schedule_task_finished = False
-            progress_bar = tqdm(range(0, self.stocks_count, batch_size))
-            for epoch in range(0, self.stocks_count, batch_size):
-                self.batch_update_real_time_quotes(self.stocks_code[epoch:epoch + batch_size], progress_bar)
-            # 等待所有线程执行完毕
-            multitasking.wait_for_tasks()
-            self.schedule_task_finished = True
+        progress_bar = tqdm(range(0, self.stocks_count, batch_size))
+        for epoch in range(0, self.stocks_count, batch_size):
+            self.batch_update_real_time_quotes(self.stocks_code[epoch:epoch + batch_size], progress_bar)
+        # 等待所有线程执行完毕
+        multitasking.wait_for_tasks()
 
     @multitasking.task
     def batch_update_real_time_quotes(self, stock_codes: List[str], progress_bar: tqdm):
@@ -113,20 +106,14 @@ class StockManager(metaclass=SingletonMeta):
 
     def __load_today_quote_history(self):
         pass
-#
-#
-# stock_manager = StockManager()
-# while True:
-#     run_pending()
-#     time.sleep(1)
 
 
-# TODO: Scheduled task.
-@repeat(every().seconds)
-def job():
-    print("I am a scheduled job")
-
+stock_manager = StockManager()
 
 while True:
-    run_pending()
-    time.sleep(1)
+    # todo: 或许time.sleep(seconds)可以是动态的，在交易时间内是20s，交易时间外要等待直到下一个交易时间
+    if is_trade_time():
+        stock_manager.update_real_time_quotes()
+    else:
+        print("It's not trading time now")
+    time.sleep(20)
