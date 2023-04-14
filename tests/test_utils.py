@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-from utils import *
+from common.utils import *
 
 
 class UtilsTestCase(unittest.TestCase):

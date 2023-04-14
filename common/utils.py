@@ -1,15 +1,13 @@
-from datetime import datetime
 import os
 
 from chinese_calendar import is_workday
 
-from common import const
-from common.const import BAD_STOCK_NAME_CONTAINS, SHANGHAI_PREFIX, BEIJING_PREFIX
-from typing import Optional
+from typing import Optional, List
 import pandas as pd
 
 import config
 from stock import RealTimeQuote
+from common.const import *
 
 
 def df_to_csv(df: pd.DataFrame) -> bool:
@@ -31,6 +29,11 @@ def df_to_csv(df: pd.DataFrame) -> bool:
     except Exception as e:
         print(f"write to {save_path} failed")
         return False
+
+
+async def quotes_to_csv(quotes: List[RealTimeQuote]) -> bool:
+    df = pd.DataFrame(quotes)
+    return df_to_csv(df)
 
 
 def parse_sina_response_text(text: str) -> Optional[RealTimeQuote]:
@@ -72,12 +75,12 @@ def is_trade_time(_datetime: datetime) -> bool:
     :return: bool value
     """
     # 工作日
-    if is_workday(_datetime.date()):
-        if datetime.isoweekday(_datetime) < 6:  # 不是周六日(1-7表示周一至周末)
-            now_time = _datetime.time()
-            # 在开盘时间内
-            if const.FIRST_OPENING_TIME < now_time < const.FIRST_CLOSING_TIME:
-                return True
-            if const.SECOND_OPENING_TIME < now_time < const.SECOND_CLOSING_TIME:
-                return True
-    return False
+    # if is_workday(_datetime.date()):
+    #     if datetime.isoweekday(_datetime) < 6:  # 不是周六日(1-7表示周一至周末)
+    now_time = _datetime.time()
+    # 在开盘时间内
+    if FIRST_OPENING_TIME < now_time < FIRST_CLOSING_TIME:
+        return True
+    if SECOND_OPENING_TIME < now_time < SECOND_CLOSING_TIME:
+        return True
+    # return False

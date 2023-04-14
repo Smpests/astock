@@ -1,122 +1,52 @@
+import asyncio
 import signal
 import time
 from datetime import datetime
-from typing import List
-import efinance as ef
+
 import multitasking
-import pandas as pd
-from retry import retry
-from tqdm import tqdm
 
-import config
-import os
-import requests
-
-from decorator import cost
-from stock import Stock, RealTimeQuote
-from utils import parse_sina_response_text, df_to_csv, code_with_prefix, is_bad_stock, is_trade_time
+from common.utils import is_trade_time, quotes_to_csv
+from stock.stock_manager import StockManager
 
 # kill all tasks on ctrl-c
-signal.signal(signal.SIGINT, multitasking.killall)
-multitasking.set_max_threads(10)
-
-
-class SingletonMeta(type):
-
-    def __init__(cls, *args, **kwargs):
-        cls.__instance = None
-        super().__init__(*args, **kwargs)
-
-    def __call__(cls, *args, **kwargs):
-        if cls.__instance is None:
-            cls.__instance = super().__call__(*args, **kwargs)
-        return cls.__instance
-
-
-class StockManager(metaclass=SingletonMeta):
-    def __init__(self, update=False):
-        """
-        :param update: 是否更新基础股票信息数据（主要用到股票代码，没必要频繁更新）
-        """
-        if update or not os.path.exists(config.STOCK_BASIC_INFO_CACHE_PATH):
-            stock_basic_info = ef.stock.get_base_info(ef.stock.get_realtime_quotes()["股票代码"])
-            stock_basic_info.dropna(subset=["流通市值"], inplace=True)
-            stock_basic_info.to_csv(config.STOCK_BASIC_INFO_CACHE_PATH, index=False, encoding="utf-8")
-        stock_basic_info = pd.read_csv(config.STOCK_BASIC_INFO_CACHE_PATH, encoding="utf-8")
-        stock_basic_info.dropna(subset=["流通市值"], inplace=True)
-        self.stocks = dict()
-        self.stocks_code = list()
-        self.real_time_df_dict = dict()
-        for row in stock_basic_info.itertuples(index=False):
-            if is_bad_stock(row[1]):
-                continue
-            code = code_with_prefix(str(row[0]))
-            self.stocks[code] = Stock(*row)  # *解包数组、元组，**解包字典
-            self.stocks_code.append(code)
-        self.session = requests.Session()
-        self.session.headers.update(config.SINA_REAL_TIME_QUOTE_API_HEADERS)
-        self.stocks_count = len(self.stocks_code)
-        self.schedule_task_finished = True
-        # TODO: 从文件中加载当天的历史数据
-        self.real_time_quote_data_frame_holder = pd.DataFrame()
-
-    @retry(tries=3, delay=1)
-    def get_real_time_quotes(self, stock_codes: List[str]) -> str:
-        try:
-            response = self.session.get(
-                url=config.SINA_REAL_TIME_QUOTE_API.format(codes=",".join(stock_codes)),
-                timeout=3,
-            )
-            if response.status_code != 200:
-                raise ValueError("Wrong status code")
-            if "FAILED" in response.text:
-                raise ValueError("Wrong text")
-            return response.text
-        except Exception:
-            raise
-
-    @cost
-    def update_real_time_quotes(self, batch_size=200):
-        progress_bar = tqdm(range(0, self.stocks_count, batch_size))
-        for epoch in range(0, self.stocks_count, batch_size):
-            self.batch_update_real_time_quotes(self.stocks_code[epoch:epoch + batch_size], progress_bar)
-        # 等待所有线程执行完毕
-        multitasking.wait_for_tasks()
-
-    @multitasking.task
-    def batch_update_real_time_quotes(self, stock_codes: List[str], progress_bar: tqdm):
-        response = self.get_real_time_quotes(stock_codes)
-        self._parse_and_update(response)
-        progress_bar.update(1)
-        progress_bar.set_description("fetch real time data")
-
-    def _save_to_df_and_file(self, real_time_quote: RealTimeQuote):
-        new_row = pd.DataFrame([real_time_quote])
-        # todo: 暂时不做数据分析，只需要把数据存下来
-        # if real_time_quote.code in self.real_time_df_dict:
-        #     # DataFrame的append()不改变原来的返回一个新的对象
-        #     self.real_time_df_dict[real_time_quote.code] = self.real_time_df_dict[real_time_quote.code].append(new_row)
-        # else:
-        #     self.real_time_df_dict[real_time_quote.code] = new_row
-        df_to_csv(new_row)
-
-    def _parse_and_update(self, response: str):
-        stock_texts = response.split("\n")
-        for text in stock_texts:
-            real_time_quote = parse_sina_response_text(text)
-            if real_time_quote:
-                self._save_to_df_and_file(real_time_quote)
-
-    def __load_today_quote_history(self):
-        pass
-
+# signal.signal(signal.SIGINT, multitasking.killall)
+# multitasking.set_max_threads(10)
 
 stock_manager = StockManager()
 
-while True:
-    # todo: 或许time.sleep(seconds)可以是动态的，在交易时间内是20s，交易时间外要等待直到下一个交易时间
-    if is_trade_time(datetime.now()):
-        stock_manager.update_real_time_quotes()
-    else:
-        print("It's not trading time now")
-    time.sleep(10)
+queue = asyncio.Queue()
+
+
+async def real_time_quotes_producer():
+    _count = 0
+    while True:
+        if is_trade_time(datetime.now()):
+        # if True:
+            await stock_manager.update_real_time_quotes()
+            _count += 1
+            if _count >= 1:  # 每只股60条写一次,todo: 改为配置参数
+                for key in stock_manager.real_time_quotes_records.keys():
+                    await queue.put(stock_manager.real_time_quotes_records[key])
+                stock_manager.real_time_quotes_records.clear()
+            await asyncio.sleep(1)
+        else:
+            print("It's not a trade time")
+            time.sleep(1)
+
+
+async def real_time_quotes_consumer():
+    while True:
+        records = await queue.get()
+        # await quotes_to_csv(records)
+        await asyncio.sleep(1)
+        print("saved")
+
+async def main():
+    producer = asyncio.create_task(real_time_quotes_producer())
+    # 1000个消费者。todo: 改为参数配置
+    consumers = [asyncio.create_task(real_time_quotes_consumer()) for i in range(1000)]
+    await asyncio.gather(producer, *consumers, return_exceptions=True)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

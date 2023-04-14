@@ -1,22 +1,5 @@
 from collections import namedtuple
 
-
-# 定义股票基础信息结构体
-Stock = namedtuple("Stock", (
-    "code",  # 股票代码
-    "name",  # 股票名称
-    "net_profit",  # 净利润
-    "total_market_value",  # 总市值
-    "circulating_market_value",  # 流通市值
-    "trade",  # 所处行业
-    "PER",  # 市盈率
-    "PBR",  # 市净率
-    "ROE",  # 净资产收益率
-    "gross_margin",  # 毛利率
-    "net_margin",  # 净利率
-    "bk_code",  # 板块编号
-))
-
 # 定义每次请求的实时交易数据结构体
 RealTimeQuote = namedtuple("RealTimeQuote", (
     "code",  # 股票代码
@@ -52,4 +35,20 @@ RealTimeQuote = namedtuple("RealTimeQuote", (
     "sell_five_price",
     "date",  # 日期：yyyy-mm-dd
     "time",  # 时间：hh:mm:ss
+))
+
+# 定义股票基础信息结构体
+Stock = namedtuple("Stock", (
+    "code",  # 股票代码
+    "name",  # 股票名称
+    "net_profit",  # 净利润
+    "total_market_value",  # 总市值
+    "circulating_market_value",  # 流通市值
+    "trade",  # 所处行业
+    "PER",  # 市盈率
+    "PBR",  # 市净率
+    "ROE",  # 净资产收益率
+    "gross_margin",  # 毛利率
+    "net_margin",  # 净利率
+    "bk_code",  # 板块编号
 ))

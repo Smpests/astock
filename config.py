@@ -2,7 +2,8 @@ import os
 
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-RESOURCES_DIR = os.path.join(ROOT_DIR, "resources")
+RESOURCES_DIR = os.path.join(ROOT_DIR, "test_resource")
+# RESOURCES_DIR = os.path.join(ROOT_DIR, "resources")
 
 STOCK_BASIC_INFO_CACHE_PATH = os.path.join(RESOURCES_DIR, "stock_basic.csv")
 SINA_REAL_TIME_QUOTE_API = "https://hq.sinajs.cn/list={codes}"  # example: https://hq.sinajs.cn/list=sz001,sh110

@@ -7,7 +7,7 @@ SHANGHAI_PREFIX = ("600", "601", "603", "605", "688", "900")
 # 北交所股票代码开头
 BEIJING_PREFIX = ("8", "43")
 # 上半场开盘时间
-FIRST_OPENING_TIME = datetime.strptime("9:30", "%H:%M").time()
+FIRST_OPENING_TIME = datetime.strptime("3:55", "%H:%M").time()
 # 上半场收盘时间
 FIRST_CLOSING_TIME = datetime.strptime("11:30", "%H:%M").time()
 # 下半场开盘时间
