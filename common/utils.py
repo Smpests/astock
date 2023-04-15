@@ -4,6 +4,7 @@ from chinese_calendar import is_workday
 
 from typing import Optional, List
 import pandas as pd
+from tqdm import tqdm
 
 import config
 from stock import RealTimeQuote
@@ -36,7 +37,7 @@ async def quotes_to_csv(quotes: List[RealTimeQuote]) -> bool:
     return df_to_csv(df)
 
 
-def parse_sina_response_text(text: str) -> Optional[RealTimeQuote]:
+def parse_line(text: str) -> Optional[RealTimeQuote]:
     text = text.strip()
     if text:
         try:
@@ -49,6 +50,16 @@ def parse_sina_response_text(text: str) -> Optional[RealTimeQuote]:
         except Exception as e:
             print(f"Something run while parse text:{text}")
     return None
+
+
+def parse_sina_response_text(response: str) -> List[RealTimeQuote]:
+    stock_texts = response.split("\n")
+    quotes = []
+    for text in stock_texts:
+        real_time_quote = parse_line(text)
+        if real_time_quote:
+            quotes.append(real_time_quote)
+    return quotes
 
 
 def is_bad_stock(name: str) -> bool:
@@ -75,12 +86,16 @@ def is_trade_time(_datetime: datetime) -> bool:
     :return: bool value
     """
     # 工作日
-    # if is_workday(_datetime.date()):
-    #     if datetime.isoweekday(_datetime) < 6:  # 不是周六日(1-7表示周一至周末)
-    now_time = _datetime.time()
-    # 在开盘时间内
-    if FIRST_OPENING_TIME < now_time < FIRST_CLOSING_TIME:
-        return True
-    if SECOND_OPENING_TIME < now_time < SECOND_CLOSING_TIME:
-        return True
-    # return False
+    if is_workday(_datetime.date()):
+        if datetime.isoweekday(_datetime) < 6:  # 不是周六日(1-7表示周一至周末)
+            now_time = _datetime.time()
+            # 在开盘时间内
+            if FIRST_OPENING_TIME < now_time < FIRST_CLOSING_TIME:
+                return True
+            if SECOND_OPENING_TIME < now_time < SECOND_CLOSING_TIME:
+                return True
+    return False
+
+
+def update_progress_bar(progress_bar: tqdm):
+    progress_bar.update(1)

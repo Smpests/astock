@@ -1,7 +1,11 @@
+import asyncio
 import os
+import signal
+import time
 from typing import List
 
 import efinance as ef
+import multitasking
 import pandas as pd
 import requests
 from retry import retry
@@ -10,11 +14,16 @@ from tqdm import tqdm
 import config
 from common.decorator import cost
 from common.meta import SingletonMeta
-from common.utils import is_bad_stock, code_with_prefix, df_to_csv, parse_sina_response_text
+from common.utils import is_bad_stock, code_with_prefix, df_to_csv, parse_line
 from stock import Stock, RealTimeQuote
 
 
-class StockManager(metaclass=SingletonMeta):
+# kill all tasks on ctrl-c
+signal.signal(signal.SIGINT, multitasking.killall)
+multitasking.set_max_threads(multitasking.cpu_count() * 2 + 1)
+
+
+class MarketManager(metaclass=SingletonMeta):
     def __init__(self, update=False):
         """
         :param update: 是否更新基础股票信息数据（主要用到股票代码，没必要频繁更新）
@@ -39,7 +48,9 @@ class StockManager(metaclass=SingletonMeta):
         self.stocks_count = len(self.stocks_code)
         self.schedule_task_finished = True
         # TODO: 从文件中加载当天的历史数据
-        self.real_time_quotes_records = dict()
+        self.real_time_quotes_buffer = dict()
+        self.max_buffer_size = 10
+        self.real_time_quotes_queue = asyncio.Queue()  # 实时交易信息队列
 
     @retry(tries=3, delay=1)
     def get_real_time_quotes(self, stock_codes: List[str]) -> str:
@@ -55,6 +66,37 @@ class StockManager(metaclass=SingletonMeta):
             return response.text
         except Exception:
             raise
+
+    async def real_time_quotes_producer(self):
+        counter = 0
+        while True:
+            tasks = self.fetch_real_time_quotes_coroutines_tasks()
+            await asyncio.wait(tasks)
+            counter += 1
+            if counter >= self.max_buffer_size:
+                for key in self.real_time_quotes_buffer.keys():
+                    await self.real_time_quotes_queue.put(self.real_time_quotes_buffer.pop(key))
+            time.sleep(1)
+
+    async def real_time_quotes_consumer(self):
+        while True:
+            quotes = await self.real_time_quotes_queue.get()
+            await asyncio.sleep(1)
+            print("saved")
+
+    async def fetch_all_stock_real_time_quotes(self, batch_size=200):
+        progress_bar = tqdm(range(0, self.stocks_count, batch_size))
+        for epoch in range(0, self.stocks_count, batch_size):
+            self.fetch_real_time_quotes_by_stock_codes(self.stocks_code[epoch:epoch + batch_size], progress_bar)
+        # 等待所有线程执行完毕
+        multitasking.wait_for_tasks()
+
+    @multitasking.task
+    def fetch_real_time_quotes_by_stock_codes(self, stock_codes: List[str], progress_bar: tqdm):
+        response = self.get_real_time_quotes(stock_codes)
+        self._parse_and_update_buffer(response)
+        progress_bar.update(1)
+        progress_bar.set_description("fetch real time quotes")
 
     async def update_real_time_quotes(self, batch_size=200):
         progress_bar = tqdm(range(0, self.stocks_count, batch_size))
@@ -80,19 +122,19 @@ class StockManager(metaclass=SingletonMeta):
         #     self.real_time_df_dict[real_time_quote.code] = new_row
         df_to_csv(new_row)
 
-    def _update_real_time_quotes_record(self, real_time_quote: RealTimeQuote):
-        if real_time_quote.code in self.real_time_quotes_records:
-            self.real_time_quotes_records[real_time_quote.code].append(real_time_quote)
+    def _update_real_time_quotes_buffer(self, real_time_quote: RealTimeQuote):
+        if real_time_quote.code in self.real_time_quotes_buffer:
+            self.real_time_quotes_buffer[real_time_quote.code].append(real_time_quote)
         else:
-            self.real_time_quotes_records[real_time_quote.code] = [real_time_quote]
+            self.real_time_quotes_buffer[real_time_quote.code] = [real_time_quote]
 
-    def _parse_and_update(self, response: str):
+    def _parse_and_update_buffer(self, response: str):
         stock_texts = response.split("\n")
         for text in stock_texts:
-            real_time_quote = parse_sina_response_text(text)
+            real_time_quote = parse_line(text)
             if real_time_quote:
                 # self._save_to_df_and_file(real_time_quote)
-                self._update_real_time_quotes_record(real_time_quote)
+                self._update_real_time_quotes_buffer(real_time_quote)
 
     def __load_today_quote_history(self):
         pass
