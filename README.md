@@ -6,3 +6,8 @@
 - git clone此项目，进入astock目录
 - pip install -r requirements.txt
 - python main.py
+
+### 参考及引用：
+- https://github.com/Micro-sheep/efinance
+- https://cloud.tencent.com/developer/article/1534790?from=15425&areaSource=102001.2&traceId=SS27pQ1bXgEx6Vu-a8LNH
+- https://docs.python.org/3.7/library/asyncio.html
