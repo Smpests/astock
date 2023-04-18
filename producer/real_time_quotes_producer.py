@@ -20,9 +20,7 @@ class RealTimeQuotesProducer(BaseProducer):
     async def async_produce(self):
         counter = 0
         while True:
-        # for _ in range(2):
             if is_trade_time(datetime.now()):
-            # if True:
                 await self.market_manager.fetch_all_stock_real_time_quotes()
                 counter += 1
                 if counter >= self.market_manager.max_buffer_size:

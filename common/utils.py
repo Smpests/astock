@@ -32,8 +32,11 @@ def df_to_csv(df: pd.DataFrame) -> bool:
         return False
 
 
-async def quotes_to_csv(quotes: List[RealTimeQuote]) -> bool:
+async def quotes_to_csv(quotes: List[RealTimeQuote], drop_duplicates=True) -> bool:
     df = pd.DataFrame(quotes)
+    if drop_duplicates:
+        # 冷门股票可能没有数据更新，导致读到多条重复数据，在这里去重
+        df.drop_duplicates(inplace=True)
     return df_to_csv(df)
 
 
